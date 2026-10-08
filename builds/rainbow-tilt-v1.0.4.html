@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#121733">
+<meta name="app-repo" content="rainbow-tilt">
+<meta name="app-version" content="1.0.4">
+<title>Rainbow Tilt</title>
+<style>
+  :root{--fg:#f3f5ff;--dim:rgba(243,245,255,.55);--panel:rgba(20,25,52,.92);--accent:#ffd34d}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0c1024;color:var(--fg);
+    font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none}
+  body{background:radial-gradient(120% 80% at 50% 35%,#2a3170 0%,#151a3d 55%,#0a0d20 100%)}
+  canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:block}
+  #hud{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;
+    padding:calc(env(safe-area-inset-top) + 12px) 18px 0;pointer-events:none}
+  #lvlNum{font-size:12px;letter-spacing:.18em;color:var(--dim);font-weight:700}
+  #lvlName{font-size:26px;font-weight:800;letter-spacing:.01em;margin-top:2px}
+  #right{text-align:right;padding-top:4px}
+  #dots{display:flex;gap:6px;justify-content:flex-end}
+  #dots i{width:12px;height:12px;border-radius:50%;border:2px solid currentColor;opacity:.45;transition:all .25s}
+  #dots i.on{background:currentColor;opacity:1;transform:scale(1.15);box-shadow:0 0 10px currentColor}
+  #homeTxt{font-size:13px;color:var(--dim);font-weight:700;margin-top:7px}
+  #homeTxt b{color:var(--fg);font-size:17px}
+  #bar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:10px;
+    padding:0 16px calc(env(safe-area-inset-bottom) + 16px)}
+  button{font:inherit;font-weight:800;font-size:15px;color:var(--fg);background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:11px 18px;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  button:active{transform:scale(.96);background:rgba(255,255,255,.18)}
+  #ver{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom) + 2px);font-size:10px;color:rgba(255,255,255,.3);pointer-events:none;letter-spacing:.05em}
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,7,18,.55);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+  .overlay.hidden{opacity:0;pointer-events:none}
+  #ovEnd{align-items:flex-start;padding-top:calc(env(safe-area-inset-top) + 84px);background:rgba(5,7,18,.18);backdrop-filter:none;-webkit-backdrop-filter:none}
+  .panel{background:var(--panel);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px 22px;width:min(340px,88vw);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .panel h2{margin:0 0 6px;font-size:26px}
+  .panel p{margin:0 0 18px;color:var(--dim);font-weight:600;line-height:1.4}
+  .panel ul{text-align:left;color:var(--dim);font-weight:600;font-size:14px;line-height:1.45;padding-left:18px;margin:4px 0 18px}
+  .panel li{margin-bottom:7px}
+  .panel .go{background:var(--accent);color:#1b1a10;border:none;padding:13px 28px;font-size:17px}
+  .panel .row{display:flex;gap:10px;justify-content:center}
+  #lvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  #lvGrid button{border-radius:14px;padding:12px 0;font-size:16px}
+  #lvGrid button.cur{outline:2px solid var(--accent);outline-offset:-2px}
+  #lvGrid button.done{color:#7bd88f}
+  #lvGrid button:disabled{opacity:.3}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div><div id="lvlNum">RAINBOW TILT</div><div id="lvlName">Level 1</div></div>
+  <div id="right"><div id="dots"></div><div id="homeTxt"><b id="homeN">0</b> / 7 home</div></div>
+</div>
+<div id="bar">
+  <button id="bLevels">Levels</button>
+  <button id="bHint">💡 Hint</button>
+  <button id="bReset">↺ Reset</button>
+  <button id="bHelp" aria-label="How to play">?</button>
+</div>
+<div id="ver">v1.0.4</div>
+
+<div class="overlay hidden" id="ovHelp"><div class="panel">
+  <h2>Rainbow Tilt</h2>
+  <ul>
+    <li>Tap a ball to start it rolling. Anywhere in its glowing beam above it works too, and you can use more than one finger.</li>
+    <li>Every flume is a different length, so every ball takes a different time to reach the square.</li>
+    <li>The square is a seesaw. As soon as any ball rolls past its middle, it rocks up and shuts out every ball that isn't already on it.</li>
+    <li>Time your starts so all seven balls get onto the square before it tips.</li>
+    <li>Drag to look around. Pinch to zoom.</li>
+  </ul>
+  <button class="go" data-close>Play</button>
+</div></div>
+
+<div class="overlay hidden" id="ovLevels"><div class="panel">
+  <h2>Levels</h2>
+  <p>Each level gives you a tighter window. From level 9, balls speed up on steep drops.</p>
+  <div id="lvGrid"></div>
+  <button data-close>Close</button>
+</div></div>
+
+<div class="overlay hidden" id="ovEnd"><div class="panel">
+  <h2 id="endT">Solved!</h2>
+  <p id="endP"></p>
+  <div class="row"><button id="endA">Retry</button><button class="go" id="endB">Next</button></div>
+</div></div>
+
+<script>
+// ===== RAINBOW TILT ENGINE v3 (3D flumes, timing puzzle, no DOM) =====
+// World units: x left/right, y up, z toward the player. Plate is y = 0.
+const COLORS = ['#e8401c', '#f78a12', '#f7d21a', '#2f8f3e', '#1f86e8', '#5b4fe0', '#9a4fe0'];
+const SPEED = 1.6, DT = 1 / 120, BALL_R = .105;
+const PIPE = { r: .14, th: .028 };                  // half-pipe inner radius, wall thickness
+const SQ = { x0: -1.62, x1: 1.62, z0: 2.9, z1: 5.12, top: .26, laneEnd: 5.0 };   // the end square (seesaw)
+const LANE_DX = .43;
+const AXIS_Y_SQ = SQ.top + PIPE.r + PIPE.th;        // pipe axis height on the square
+const Z_MID = SQ.z0 + (SQ.laneEnd - SQ.z0) / 2;       // pivot line
+const LEAD = .16;                                   // pipe behind the waiting ball
+
+function makeRng(seed) {
+  let s = (seed >>> 0) || 1;
+  return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+}
+const lerp = (a, b, k) => a + (b - a) * k;
+const v3 = {
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+};
+
+// Catmull-Rom through 2D plan points [x,z], sampled densely
+function catmull(P, per) {
+  const out = [];
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    for (let k = 0; k < per; k++) {
+      const t = k / per, t2 = t * t, t3 = t2 * t;
+      const f = j => .5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+      out.push({ p: [f(0), f(1)], wp: k === 0 ? i : -1 });
+    }
+  }
+  out.push({ p: P[P.length - 1].slice(), wp: P.length - 1 });
+  return out;
+}
+
+// Build one flume. tp: { amp: lateral swing multiplier, hel: {waypointIndex: turns},
+//   optional (levels 9+): ys start height, cross {gridIndex: lane it borrows}, plunge {waypointIndex: 1}, hr spiral radius }
+function buildTrack(i, seed, tp, phys) {
+  const rnd = makeRng(seed * 7919 + i * 104729 + 13);
+  const cx = (i - 3) * .95;
+  const laneX = (i - 3) * LANE_DX;
+  const zs = -4.75 + rnd() * .55;
+  const ys0 = 2.35 + rnd() * .55, ys = tp.ys != null ? tp.ys : ys0;
+  // plan waypoints from the back toward the square
+  const P = [[cx + (rnd() - .5) * .3, zs], [cx + (rnd() - .5) * .3, zs + .45]];
+  // shared bend grid so neighbouring flumes swing in step and never meet
+  const g = makeRng(seed * 17 + 1);
+  const gapZ = .5 + g() * .2, flip = g() < .5 ? 1 : -1, z0 = -4.2 + g() * .3;
+  const helixAt = new Map();
+  for (let k = 0; ; k++) {
+    const z = z0 + k * gapZ;
+    if (z > .45) break;
+    if (z < zs + .4) continue;
+    const sgn = (k % 2 ? 1 : -1) * flip;
+    const bx = tp.cross && tp.cross[k] != null ? (tp.cross[k] - 3) * .95 : cx;   // crossovers borrow a neighbour's lane
+    const x = Math.max(-3.2, Math.min(3.2, bx + sgn * .46 * tp.amp));
+    P.push([x, z]);
+    const turns = tp.hel[P.length - 1];
+    if (turns) helixAt.set(P.length - 1, { turns, side: x > bx ? 1 : -1 });
+  }
+  P.push([cx, .95]);
+  P.push([lerp(cx, laneX, .5), 1.65]);
+  P.push([lerp(cx, laneX, .9), 2.2]);
+  P.push([laneX, 2.55]);
+  P.push([laneX, SQ.z0]);
+  const dense = catmull(P, 24);
+  // splice spirals: a circle tangent to the path at the waypoint
+  const plan = [];   // {p:[x,z], w: drop weight, hx: helix centre or null}
+  let curWp = 0;
+  for (let k = 0; k < dense.length; k++) {
+    const d = dense[k];
+    if (d.wp >= 0) curWp = d.wp;
+    plan.push({ p: d.p, w: tp.plunge && tp.plunge[curWp] ? 4.5 : 1, hx: null });
+    const H = d.wp >= 0 ? helixAt.get(d.wp) : null;
+    if (H && k > 0 && k < dense.length - 1) {
+      const a = dense[k - 1].p, b = dense[k + 1].p;
+      let tx = b[0] - a[0], tz = b[1] - a[1]; const l = Math.hypot(tx, tz); tx /= l; tz /= l;
+      const R = tp.hr || .27;
+      // left normal in plan (x,z): rotate tangent +90
+      const nx = -tz * H.side, nz = tx * H.side;
+      const c = [d.p[0] + nx * R, d.p[1] + nz * R];
+      const a0 = Math.atan2(d.p[1] - c[1], d.p[0] - c[0]);
+      const steps = Math.round(48 * H.turns);
+      // direction of travel around the circle must match the tangent
+      const dirSign = (Math.cos(a0) * tz - Math.sin(a0) * tx) > 0 ? 1 : -1;
+      for (let s = 1; s <= steps; s++) {
+        const ang = a0 + dirSign * s / steps * Math.PI * 2 * H.turns;
+        plan.push({ p: [c[0] + Math.cos(ang) * R, c[1] + Math.sin(ang) * R], w: R === .27 ? 2.6 : 2.6 * .27 / R, hx: c });
+      }
+    }
+  }
+  // resample by plan arc length, heights by weighted drop
+  const cumW = [0], cumL = [0];
+  for (let k = 1; k < plan.length; k++) {
+    const l = Math.hypot(plan[k].p[0] - plan[k - 1].p[0], plan[k].p[1] - plan[k - 1].p[1]);
+    cumL.push(cumL[k - 1] + l); cumW.push(cumW[k - 1] + l * plan[k].w);
+  }
+  const Lp = cumL[cumL.length - 1], Wt = cumW[cumW.length - 1];
+  const yEnd = AXIS_Y_SQ + .02;
+  const step = .05, pts = [], hx = [];
+  let k = 0;
+  for (let s = 0; s <= Lp + 1e-9; s += step) {
+    while (k < cumL.length - 2 && cumL[k + 1] < s) k++;
+    const f = (s - cumL[k]) / ((cumL[k + 1] - cumL[k]) || 1);
+    const x = lerp(plan[k].p[0], plan[k + 1].p[0], f), zz = lerp(plan[k].p[1], plan[k + 1].p[1], f);
+    const w = lerp(cumW[k], cumW[k + 1], f);
+    pts.push([x, ys - (ys - yEnd) * (w / Wt), zz]);
+    hx.push(plan[k + 1].hx);
+  }
+  pts[pts.length - 1] = [laneX, yEnd, SQ.z0];
+  // lead-in behind the start
+  const t0 = v3.norm(v3.sub(pts[1], pts[0]));
+  pts.unshift(v3.sub(pts[0], v3.mul(t0, LEAD))); hx.unshift(null);
+  // lanes across the square
+  const nSq = Math.ceil((SQ.laneEnd - SQ.z0) / step);
+  for (let q = 1; q <= nSq; q++) { pts.push([laneX, AXIS_Y_SQ, SQ.z0 + (SQ.laneEnd - SQ.z0) * q / nSq]); hx.push(null); }
+  const cum = [0];
+  for (let q = 1; q < pts.length; q++) cum.push(cum[q - 1] + Math.hypot(pts[q][0] - pts[q - 1][0], pts[q][1] - pts[q - 1][1], pts[q][2] - pts[q - 1][2]));
+  const len = cum[cum.length - 1];
+  const sEntry = cum[pts.length - 1 - nSq];
+  const sMid = sEntry + (Z_MID - SQ.z0);
+  // frames: down vector D (banked on bends), side vector
+  const T = pts.map((_, q) => v3.norm(v3.sub(pts[Math.min(q + 1, pts.length - 1)], pts[Math.max(q - 1, 0)])));
+  const kap = pts.map((_, q) => {
+    const a = T[Math.max(q - 1, 0)], b = T[Math.min(q + 1, pts.length - 1)];
+    const cr = a[2] * b[0] - a[0] * b[2];
+    const ds = cum[Math.min(q + 1, pts.length - 1)] - cum[Math.max(q - 1, 0)] || 1;
+    return cr / ds;
+  });
+  const D = [], Sd = [];
+  for (let q = 0; q < pts.length; q++) {
+    let sm = 0, n = 0;
+    for (let j = -6; j <= 6; j++) { const r = q + j; if (r >= 0 && r < pts.length) { sm += kap[r]; n++; } }
+    const onSq = cum[q] >= sEntry - .3;
+    const beta = onSq ? 0 : Math.max(-.6, Math.min(.6, .17 * sm / n));
+    const t = T[q];
+    let up = v3.norm(v3.sub([0, 1, 0], v3.mul(t, t[1])));
+    const side = v3.norm(v3.cross(t, up));
+    const d = v3.norm(v3.add(v3.mul(up, -Math.cos(beta)), v3.mul(side, Math.sin(beta))));
+    D.push(d); Sd.push(v3.norm(v3.cross(t, d)));
+  }
+  // spiral poles
+  const poles = [];
+  for (let q = 0; q < hx.length; q++) if (hx[q] && !poles.some(p => p.c === hx[q])) poles.push({ c: hx[q], top: pts[q][1], r: tp.hr || .27 });
+  // levels 9+: rolling speed follows the slope (smoothed so it feels like momentum)
+  let vs = null;
+  if (phys) {
+    vs = pts.map((_, q) => {
+      const a = Math.max(0, q - 10), b = Math.min(pts.length - 1, q + 10);
+      const slope = (pts[a][1] - pts[b][1]) / ((cum[b] - cum[a]) || 1);
+      return Math.max(.9, Math.min(3.2, 1 + 2.6 * slope));
+    });
+    for (let pass = 0; pass < 3; pass++) for (let q = 1; q < vs.length - 1; q++) vs[q] = (vs[q - 1] + vs[q] + vs[q + 1]) / 3;
+  }
+  return { i, nWay: P.length, pts, cum, len, sStart: LEAD, sEntry, sMid, D, Sd, poles, vs, helices: helixAt.size };
+}
+
+function buildGeometry(level) {
+  return [0, 1, 2, 3, 4, 5, 6].map(i => buildTrack(i, level.seed, level.tp[i], level.phys));
+}
+
+// Pipes must never touch: check axis clearance between and within tracks
+function clearance(tracks) {
+  const pts = [];
+  for (const tr of tracks) for (let q = 0; q < tr.pts.length; q += 2) if (tr.cum[q] < tr.sEntry - .2) pts.push([tr.i, tr.cum[q], tr.pts[q]]);
+  let min = 9, where = null;
+  for (let a = 0; a < pts.length; a++) for (let b = a + 1; b < pts.length; b++) {
+    const A = pts[a], B = pts[b];
+    if (A[0] === B[0] && Math.abs(A[1] - B[1]) < 1.2) continue;
+    const dx = A[2][0] - B[2][0], dz = A[2][2] - B[2][2];
+    if (Math.abs(dx) > .6 || Math.abs(dz) > .6) continue;
+    const d = Math.hypot(dx, A[2][1] - B[2][1], dz);
+    if (d < min) { min = d; where = [A, B]; }
+  }
+  return { min, where };
+}
+
+function pointAt(tr, s) {
+  const { cum, pts } = tr;
+  if (s <= 0) return pts[0].slice();
+  if (s >= tr.len) return pts[pts.length - 1].slice();
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const k = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
+  return [lerp(pts[lo][0], pts[hi][0], k), lerp(pts[lo][1], pts[hi][1], k), lerp(pts[lo][2], pts[hi][2], k)];
+}
+function frameAt(tr, s) {
+  const { cum } = tr;
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const k = Math.max(0, Math.min(1, (s - cum[lo]) / (cum[hi] - cum[lo] || 1)));
+  return v3.norm([lerp(tr.D[lo][0], tr.D[hi][0], k), lerp(tr.D[lo][1], tr.D[hi][1], k), lerp(tr.D[lo][2], tr.D[hi][2], k)]);
+}
+
+function speedAt(tr, s) {
+  if (!tr.vs) return SPEED;
+  const { cum } = tr; let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  return tr.vs[lo];
+}
+function travelTime(tr) {
+  if (!tr.vs) return (tr.sEntry - tr.sStart) / SPEED;
+  let s = tr.sStart, t = 0;
+  while (s < tr.sEntry) { s += speedAt(tr, s) * DT; t += DT; }
+  return t;
+}
+const windowSec = (tr, sq) => (tr.sMid - tr.sEntry) / sq;
+
+// ---- state ----
+function newState(tracks) {
+  return { t: 0, tipped: false, tipT: -1, balls: tracks.map(tr => ({ s: tr.sStart, mode: 'idle', relT: -1, inT: -1 })) };
+}
+function release(st, b) {
+  const ball = st.balls[b];
+  if (ball.mode !== 'idle') return false;
+  ball.mode = 'rolling'; ball.relT = st.t;
+  return true;
+}
+// sq = rolling speed across the flat end square (sets the timing window)
+function step(st, tracks, sq) {
+  st.t += DT;
+  for (let b = 0; b < st.balls.length; b++) {
+    const ball = st.balls[b], tr = tracks[b];
+    if (ball.mode !== 'rolling') continue;
+    const v = ball.s >= tr.sEntry ? sq : speedAt(tr, ball.s);
+    let ns = ball.s + v * DT;
+    const lip = tr.sEntry - BALL_R;
+    if (st.tipped && ball.s <= lip && ns >= lip) { ball.s = lip; ball.mode = 'blocked'; ball.inT = st.t; continue; }
+    if (ball.s < tr.sEntry && ns >= tr.sEntry) ball.inT = st.t;
+    if (!st.tipped && ball.s < tr.sMid && ns >= tr.sMid) { st.tipped = true; st.tipT = st.t; st.tipBy = b; }
+    if (ns >= tr.len - BALL_R) { ns = tr.len - BALL_R; ball.mode = 'done'; }
+    ball.s = ns;
+  }
+}
+const moving = st => st.balls.some(b => b.mode === 'rolling');
+const allDone = st => st.balls.every(b => b.mode === 'done');
+function verdict(st) {
+  if (allDone(st)) return 'win';
+  if (st.tipped && !moving(st)) return 'lose';
+  return null;
+}
+
+if (typeof module !== 'undefined') module.exports = { speedAt, buildTrack, COLORS, SPEED, DT, BALL_R, PIPE, SQ, LANE_DX, AXIS_Y_SQ, Z_MID, makeRng, buildGeometry, clearance, travelTime, windowSec, pointAt, frameAt, newState, release, step, moving, allDone, verdict, v3 };
+// ===== END ENGINE =====
+
+</script>
+<script>
+const LEVELS = [{"seed":17,"sq":0.8,"tp":[{"amp":0.91124,"hel":{"3":2,"12":1}},{"amp":0.627,"hel":{}},{"amp":0.76071,"hel":{"4":1}},{"amp":0.47165,"hel":{}},{"amp":0.92063,"hel":{"8":1}},{"amp":0.93691,"hel":{"8":1}},{"amp":0.93189,"hel":{}}]},{"seed":18,"sq":0.95,"tp":[{"amp":0.21761,"hel":{"9":1}},{"amp":0.92688,"hel":{"4":1,"8":1}},{"amp":0.96461,"hel":{}},{"amp":0.72006,"hel":{}},{"amp":0.76619,"hel":{"10":1}},{"amp":0.37147,"hel":{}},{"amp":0.65813,"hel":{"6":2,"11":1}}]},{"seed":41,"sq":1.1,"tp":[{"amp":0.51646,"hel":{"5":1}},{"amp":0.36981,"hel":{}},{"amp":0.83882,"hel":{"3":1}},{"amp":0.57402,"hel":{"8":1}},{"amp":0.48775,"hel":{}},{"amp":0.9082,"hel":{"5":1,"9":1}},{"amp":0.69066,"hel":{"8":2,"12":1}}]},{"seed":46,"sq":1.25,"tp":[{"amp":0.69612,"hel":{"3":2,"10":1}},{"amp":0.70059,"hel":{}},{"amp":0.8303,"hel":{"10":2,"11":1}},{"amp":0.624,"hel":{"9":1}},{"amp":0.90445,"hel":{"7":1}},{"amp":0.33624,"hel":{}},{"amp":0.54498,"hel":{}}]},{"seed":59,"sq":1.4,"tp":[{"amp":0.39873,"hel":{}},{"amp":0.77201,"hel":{}},{"amp":0.92936,"hel":{"7":1}},{"amp":0.72738,"hel":{"5":2,"6":1}},{"amp":0.98756,"hel":{}},{"amp":0.3609,"hel":{}},{"amp":0.8432,"hel":{"3":1,"11":1}}]},{"seed":110,"sq":1.55,"tp":[{"amp":0.90041,"hel":{"3":1,"8":1}},{"amp":0.97614,"hel":{"12":1}},{"amp":0.68516,"hel":{}},{"amp":0.32669,"hel":{}},{"amp":0.83571,"hel":{"10":1}},{"amp":0.91918,"hel":{}},{"amp":0.90361,"hel":{"9":1}}]},{"seed":118,"sq":1.7,"tp":[{"amp":0.98619,"hel":{"6":1,"7":1}},{"amp":0.16484,"hel":{"2":1}},{"amp":0.8997,"hel":{"7":1,"11":1}},{"amp":0.43605,"hel":{"9":1}},{"amp":0.63169,"hel":{"7":1}},{"amp":0.29458,"hel":{}},{"amp":0.67237,"hel":{"3":1,"8":1}}]},{"seed":120,"sq":1.85,"tp":[{"amp":0.06921,"hel":{"7":1}},{"amp":0.36586,"hel":{}},{"amp":0.86271,"hel":{}},{"amp":0.89243,"hel":{"12":1}},{"amp":0.80175,"hel":{"8":1}},{"amp":0.90752,"hel":{"3":1}},{"amp":0.93588,"hel":{"3":2,"10":1}}]},{"seed":5000,"sq":1,"phys":true,"name":"Crossover","tp":[{"amp":0.88418,"hel":{"9":1}},{"ys":3.35,"cross":{"1":2,"2":2,"3":2,"4":2},"amp":0.40963,"hel":{}},{"ys":2,"cross":{"1":1,"2":1,"3":1,"4":1},"amp":0.5578,"hel":{}},{"amp":0.70408,"hel":{}},{"amp":0.73919,"hel":{"3":1}},{"amp":0.56987,"hel":{"2":1}},{"amp":0.27725,"hel":{}}]},{"seed":6000,"sq":1.1,"phys":true,"name":"Big Drop","tp":[{"plunge":{"4":1,"5":1,"7":1},"amp":0.9911,"hel":{}},{"amp":0.76351,"hel":{}},{"amp":0.73502,"hel":{"4":1}},{"amp":0.50282,"hel":{}},{"amp":0.61716,"hel":{"3":1}},{"amp":0.80283,"hel":{"3":1}},{"amp":0.38362,"hel":{}}]},{"seed":7001,"sq":1.2,"phys":true,"name":"Double Helix","tp":[{"amp":0.30502,"hel":{"7":1}},{"amp":0.81389,"hel":{"6":1}},{"amp":0.35999,"hel":{"3":2}},{"amp":0.1803,"hel":{}},{"amp":0.5535,"hel":{}},{"amp":0.82671,"hel":{"6":1}},{"amp":0.5655,"hel":{}}]},{"seed":8020,"sq":1.3,"phys":true,"name":"Giant Spiral","tp":[{"amp":0.77025,"hel":{"9":1}},{"amp":0.71499,"hel":{}},{"plunge":{"6":1},"amp":0.78138,"hel":{"5":1}},{"amp":0.42033,"hel":{}},{"amp":0.53805,"hel":{}},{"hr":0.42,"amp":0.44902,"hel":{"3":1}},{"amp":0.42379,"hel":{"8":1}}]},{"seed":9008,"sq":1.4,"phys":true,"name":"Over & Under","tp":[{"amp":0.66486,"hel":{}},{"ys":3.35,"cross":{"3":2,"4":2,"5":2},"amp":0.243,"hel":{}},{"ys":2,"cross":{"3":1,"4":1,"5":1},"plunge":{"5":1},"amp":0.39199,"hel":{"3":1}},{"ys":3.35,"cross":{"1":4,"2":4,"3":4},"amp":0.06911,"hel":{}},{"ys":2,"cross":{"1":3,"2":3,"3":3},"amp":0.87493,"hel":{"6":1}},{"amp":0.73767,"hel":{"8":1}},{"amp":0.52708,"hel":{}}]},{"seed":10025,"sq":1.5,"phys":true,"name":"Freefall","tp":[{"plunge":{"7":1},"amp":0.49544,"hel":{"4":2}},{"plunge":{"7":1},"amp":0.31836,"hel":{}},{"ys":2,"cross":{"1":3,"2":3,"3":3,"4":3},"plunge":{"7":1},"amp":0.31256,"hel":{}},{"ys":3.35,"cross":{"1":2,"2":2,"3":2,"4":2},"amp":0.43031,"hel":{}},{"amp":0.88052,"hel":{}},{"plunge":{"6":1},"amp":0.72688,"hel":{"5":1}},{"amp":0.50893,"hel":{"7":1}}]},{"seed":11517,"sq":1.6,"phys":true,"name":"Tangle","tp":[{"ys":3.35,"cross":{"1":1,"2":1,"3":1},"plunge":{"3":1},"amp":0.55022,"hel":{}},{"ys":2,"cross":{"1":0,"2":0,"3":0},"amp":0.50324,"hel":{}},{"ys":3.35,"cross":{"1":3,"2":3,"3":3,"4":3},"amp":0.10448,"hel":{}},{"ys":2,"cross":{"1":2,"2":2,"3":2,"4":2},"amp":0.71272,"hel":{"7":1}},{"ys":2,"cross":{"1":5,"2":5,"3":5},"amp":0.65918,"hel":{}},{"ys":3.35,"cross":{"1":4,"2":4,"3":4},"amp":0.80068,"hel":{}},{"amp":0.53136,"hel":{"7":2}}]},{"seed":12253,"sq":1.7,"phys":true,"name":"Grand Finale","tp":[{"plunge":{"4":1},"amp":0.40382,"hel":{"6":1}},{"ys":2,"cross":{"2":2,"3":2},"hr":0.42,"amp":0.4071,"hel":{"6":1}},{"ys":3.35,"cross":{"2":1,"3":1},"amp":0.64988,"hel":{"3":1,"5":1}},{"ys":3.35,"cross":{"1":4,"2":4,"3":4,"4":4},"plunge":{"7":1},"amp":0.56423,"hel":{}},{"ys":2,"cross":{"1":3,"2":3,"3":3,"4":3},"amp":0.36294,"hel":{"4":1}},{"amp":0.63291,"hel":{"4":2,"5":1}},{"amp":0.29824,"hel":{}}]}];
+const hex = h => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+const RGB = COLORS.map(hex);
+const { sub, add, mul, dot, cross, norm } = v3;
+const RB = BALL_R;
+const PIV = [0, SQ.top, Z_MID];
+const REST = -2.5 * Math.PI / 180, TIP = 8 * Math.PI / 180;
+const PLATE = { x0: -3.62, x1: 3.62, z0: -5.45, z1: 5.55 };
+
+// ---------------------------------------------------------------- WebGL (Wriggle renderer)
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: false });
+const VS = `attribute vec3 aP;attribute vec3 aN;attribute vec3 aC;
+uniform mat4 uVP;uniform mat3 uV;uniform vec3 uT;uniform mat3 uR;uniform vec3 uS;
+varying vec3 vN;varying float vD;varying vec3 vC;
+void main(){vec3 w=uT+uR*(aP*uS);vN=uV*normalize(uR*(aN/uS));vC=aC;vec4 p=uVP*vec4(w,1.);vD=p.w;gl_Position=p;}`;
+const FS = `precision mediump float;
+uniform vec4 uC;uniform vec3 uF;uniform float uFA;uniform vec2 uFog;uniform float uMetal;uniform float uE;
+varying vec3 vN;varying float vD;varying vec3 vC;
+void main(){vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;vec3 L=normalize(vec3(-.45,.7,.6));vec3 b=mix(uC.rgb*vC,uF,uFA);
+if(uE>1.5){gl_FragColor=vec4(uC.rgb,uC.a*vC.r);return;}
+if(uE>.5){gl_FragColor=vec4(b,uC.a);return;}
+float d=max(dot(n,L),0.);float hemi=.5+.5*n.y;
+vec3 c=b*(.26+.24*hemi+.6*d);vec3 H=normalize(L+vec3(0.,0.,1.));float sp=pow(max(dot(n,H),0.),36.)*.42;
+if(uMetal>0.){vec3 r=reflect(vec3(0.,0.,-1.),n);
+  vec3 env=mix(vec3(.10,.12,.24),vec3(.92,.95,1.),smoothstep(-.15,.55,r.y));env+=vec3(.55)*exp(-pow((r.y-.08)*9.,2.));
+  c=mix(c,env*b,uMetal);sp=pow(max(dot(n,H),0.),90.)*1.2*uMetal+sp*(1.-uMetal);}
+c+=vec3(sp);
+float rim=pow(1.-max(n.z,0.),3.);c+=b*rim*.18;
+float f=clamp((vD-uFog.x)/(uFog.y-uFog.x),0.,1.);c=mix(c,c*.6,f);
+gl_FragColor=vec4(c,uC.a);}`;
+function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; }
+const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+const U = {}; for (const n of ['uVP', 'uV', 'uT', 'uR', 'uS', 'uC', 'uF', 'uFA', 'uFog', 'uMetal', 'uE']) U[n] = gl.getUniformLocation(prog, n);
+const aP = gl.getAttribLocation(prog, 'aP'), aN = gl.getAttribLocation(prog, 'aN'), aC = gl.getAttribLocation(prog, 'aC');
+gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN); gl.enableVertexAttribArray(aC);
+
+function mesh(p, n, c, idx) {
+  const m = {}, buf = (t, d) => { const b = gl.createBuffer(); gl.bindBuffer(t, b); gl.bufferData(t, d, gl.STATIC_DRAW); return b; };
+  m.vb = buf(gl.ARRAY_BUFFER, new Float32Array(p)); m.nb = buf(gl.ARRAY_BUFFER, new Float32Array(n)); m.cb = buf(gl.ARRAY_BUFFER, new Float32Array(c));
+  m.ib = buf(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx)); m.count = idx.length; return m;
+}
+function freeMesh(m) { for (const k of ['vb', 'nb', 'cb', 'ib']) gl.deleteBuffer(m[k]); }
+// Builder that bakes coloured geometry into meshes (auto-splits under the 16-bit index limit)
+function Builder() {
+  const out = []; let p = [], n = [], c = [], idx = [];
+  const flush = () => { if (idx.length) out.push(mesh(p, n, c, idx)); p = []; n = []; c = []; idx = []; };
+  const B = {
+    room(k) { if (p.length / 3 + k > 65000) flush(); return p.length / 3; },
+    v(pos, nm, col) { p.push(pos[0], pos[1], pos[2]); n.push(nm[0], nm[1], nm[2]); c.push(col[0], col[1], col[2]); },
+    tri(a, b, cc) { idx.push(a, b, cc); },
+    quad(a, b, cc, d, nm, col) {
+      const base = B.room(4);
+      for (const v of [a, b, cc, d]) B.v(v, nm, col);
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    },
+    // grid: rows x cols of vertices from fn(r, c) -> [pos, nrm, col]
+    grid(rows, cols, fn) {
+      const base = B.room(rows * cols);
+      for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) { const [pp, nn, cc] = fn(r, k); B.v(pp, nn, cc); }
+      for (let r = 0; r < rows - 1; r++) for (let k = 0; k < cols - 1; k++) {
+        const a = base + r * cols + k, b = a + cols;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    },
+    box8(v, col, sideCol) {
+      const N = (a, b, cc) => norm(cross(sub(b, a), sub(cc, a)));
+      const faces = [[4, 5, 6, 7], [3, 2, 1, 0], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+      faces.forEach((f, i) => B.quad(v[f[0]], v[f[1]], v[f[2]], v[f[3]], N(v[f[0]], v[f[1]], v[f[2]]), i === 0 ? col : (sideCol || col)));
+    },
+    box(x0, y0, z0, x1, y1, z1, col, sideCol) { B.box8([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], col, sideCol); },
+    cyl(a, b, r, col, seg = 10) { // cylinder between points a and b
+      const ax = norm(sub(b, a)), t1 = norm(cross(ax, Math.abs(ax[1]) > .9 ? [1, 0, 0] : [0, 1, 0])), t2 = cross(ax, t1);
+      B.grid(2, seg + 1, (rr, k) => { const an = k / seg * Math.PI * 2, d = add(mul(t1, Math.cos(an)), mul(t2, Math.sin(an))); return [add(rr ? b : a, mul(d, r)), d, col]; });
+    },
+    done() { flush(); return out; }
+  };
+  return B;
+}
+const shadeC = (c, f) => c.map(v => f >= 0 ? v + (1 - v) * f : v * (1 + f));
+
+// half-pipe cross-section (u = sideways, v = down), rolled rims
+const HP = (() => {
+  const r = PIPE.r, th = PIPE.th, R = r + th, A = 100 * Math.PI / 180, rm = r + th / 2;
+  const P = [];   // [u, v, nu, nv, kind]  kind 0 inner 1 rim 2 outer
+  const nI = 16, nC = 6;
+  for (let k = 0; k <= nI; k++) { const t = -A + 2 * A * k / nI; P.push([r * Math.sin(t), r * Math.cos(t), -Math.sin(t), -Math.cos(t), 0]); }
+  { const rd = [Math.sin(A), Math.cos(A)], td = [Math.cos(A), -Math.sin(A)], c = [rm * rd[0], rm * rd[1]];
+    for (let k = 1; k < nC; k++) { const f = k / nC * Math.PI, d = [-rd[0] * Math.cos(f) + td[0] * Math.sin(f), -rd[1] * Math.cos(f) + td[1] * Math.sin(f)]; P.push([c[0] + d[0] * th / 2, c[1] + d[1] * th / 2, d[0], d[1], 1]); } }
+  for (let k = 0; k <= nI; k++) { const t = A - 2 * A * k / nI; P.push([R * Math.sin(t), R * Math.cos(t), Math.sin(t), Math.cos(t), 2]); }
+  { const rd = [Math.sin(-A), Math.cos(-A)], td = [-Math.cos(-A), Math.sin(-A)], c = [rm * rd[0], rm * rd[1]];
+    for (let k = 1; k < nC; k++) { const f = k / nC * Math.PI, d = [rd[0] * Math.cos(f) + td[0] * Math.sin(f), rd[1] * Math.cos(f) + td[1] * Math.sin(f)]; P.push([c[0] + d[0] * th / 2, c[1] + d[1] * th / 2, d[0], d[1], 1]); } }
+  P.push(P[0].slice());
+  return { P, R, A };
+})();
+// samples: [{p, D, S, s}] ; place maps a world point (identity or into slab space)
+function halfPipe(B, samples, col, startCap) {
+  const inner = shadeC(col, .22), rimC = shadeC(col, .45), outer = shadeC(col, -.32), band = shadeC(col, -.45);
+  B.grid(samples.length, HP.P.length, (r, k) => {
+    const sm = samples[r], q = HP.P[k];
+    const pos = add(sm.p, add(mul(sm.S, q[0]), mul(sm.D, q[1])));
+    const nm = add(mul(sm.S, q[2]), mul(sm.D, q[3]));
+    const joint = (sm.s % .8) < .045;
+    const cc = q[4] === 0 ? inner : q[4] === 1 ? (joint ? band : rimC) : (joint ? band : outer);
+    return [pos, nm, cc];
+  });
+  if (startCap) {
+    const sm = samples[0], T = norm(sub(samples[1].p, samples[0].p)), nm = mul(T, -1);
+    const base = B.room(40);
+    B.v(sm.p, nm, outer);
+    const n = 24;
+    for (let k = 0; k <= n; k++) { const t = -HP.A + 2 * HP.A * k / n; B.v(add(sm.p, add(mul(sm.S, HP.R * Math.sin(t)), mul(sm.D, HP.R * Math.cos(t)))), nm, outer); }
+    for (let k = 0; k < n; k++) B.tri(base, base + 1 + k, base + 2 + k);
+  }
+}
+
+// primitives
+function sphGeo(lat, lon) {
+  const p = [], n = [], c = [], idx = [];
+  for (let i = 0; i <= lat; i++) { const th = i / lat * Math.PI; for (let j = 0; j <= lon; j++) { const ph = j / lon * Math.PI * 2; const x = Math.sin(th) * Math.cos(ph), y = Math.cos(th), z = Math.sin(th) * Math.sin(ph); p.push(x, y, z); n.push(x, y, z); c.push(1, 1, 1); } }
+  for (let i = 0; i < lat; i++) for (let j = 0; j < lon; j++) { const a = i * (lon + 1) + j, b = a + lon + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  return mesh(p, n, c, idx);
+}
+function ringGeo(seg, r0, r1) {
+  const p = [], n = [], c = [], idx = [];
+  for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2, x = Math.cos(a), z = Math.sin(a); p.push(x * r0, 0, z * r0, x * r1, 0, z * r1); n.push(0, 1, 0, 0, 1, 0); c.push(1, 1, 1, 1, 1, 1); }
+  for (let i = 0; i < seg; i++) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  return mesh(p, n, c, idx);
+}
+const SPH = sphGeo(18, 28), DISC = ringGeo(28, 0, 1), RING = ringGeo(48, .82, 1);
+// launch beam: vertical strip fading upward (drawn additively)
+const BEAM = (() => { const p = [], n = [], c = [], idx = []; const N = 8;
+  const XS = [-.5, -.25, 0, .25, .5], M = XS.length;
+  for (let k = 0; k <= N; k++) { const y = k / N, f = Math.pow(1 - y, 1.4); for (const x of XS) { p.push(x, y, 0); n.push(0, 0, 1); const e = f * Math.exp(-x * x * 14); c.push(e, e, e); } }
+  for (let k = 0; k < N; k++) for (let j = 0; j < M - 1; j++) { const a = k * M + j, b = a + M; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  return mesh(p, n, c, idx); })();
+const I3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+const rotX = a => { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([1, 0, 0, 0, c, s, 0, -s, c]); };
+const m3v = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+
+// ---------------------------------------------------------------- camera
+const FOV = 38 * Math.PI / 180, ELEV0 = .9;
+const cam = { yaw: 0, elev: ELEV0, zoom: 1, fitDist: 14, target: [0, .4, 0], VP: null, V3: null };
+function mul4(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+function viewProjFor(yaw, elev, dist, target) {
+  const eye = [target[0] + dist * Math.sin(yaw) * Math.cos(elev), target[1] + dist * Math.sin(elev), target[2] + dist * Math.cos(yaw) * Math.cos(elev)];
+  const f = norm(sub(target, eye)), s = norm(cross(f, [0, 1, 0])), u = cross(s, f);
+  const V = new Float32Array([s[0], u[0], -f[0], 0, s[1], u[1], -f[1], 0, s[2], u[2], -f[2], 0, -dot(s, eye), -dot(u, eye), dot(f, eye), 1]);
+  const asp = cv.width / cv.height, t = 1 / Math.tan(FOV / 2), n = .1, fa = 100, nf = 1 / (n - fa);
+  const P = new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (fa + n) * nf, -1, 0, 0, 2 * fa * n * nf, 0]);
+  return { VP: mul4(P, V), V3: new Float32Array([s[0], u[0], -f[0], s[1], u[1], -f[1], s[2], u[2], -f[2]]), u };
+}
+function project(VP, w) {
+  const x = VP[0] * w[0] + VP[4] * w[1] + VP[8] * w[2] + VP[12], y = VP[1] * w[0] + VP[5] * w[1] + VP[9] * w[2] + VP[13], ww = VP[3] * w[0] + VP[7] * w[1] + VP[11] * w[2] + VP[15];
+  const r = cv.getBoundingClientRect();
+  return [(x / ww + 1) / 2 * r.width, (1 - y / ww) / 2 * r.height, ww];
+}
+let fitPts = [];
+function safeRect() {
+  const r = cv.getBoundingClientRect();
+  const top = document.getElementById('hud').getBoundingClientRect().bottom + 4;
+  const bot = document.getElementById('bar').getBoundingClientRect().top - 4;
+  return { l: 6, r: r.width - 6, t: top, b: bot };
+}
+function fitCamera() {
+  const sr = safeRect();
+  cam.target = [0, .4, 0];
+  const fits = d => { const m = viewProjFor(0, ELEV0, d, cam.target).VP; return fitPts.every(p => { const q = project(m, p); return q[0] >= sr.l && q[0] <= sr.r && q[1] >= sr.t && q[1] <= sr.b; }); };
+  for (let pass = 0; pass < 3; pass++) {
+    let lo = 3, hi = 80;
+    for (let k = 0; k < 30; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    cam.fitDist = hi;
+    const m = viewProjFor(0, ELEV0, hi, cam.target);
+    const ys = fitPts.map(p => project(m.VP, p)[1]);
+    const dy = (Math.min(...ys) + Math.max(...ys)) / 2 - (sr.t + sr.b) / 2;
+    const wpp = 2 * hi * Math.tan(FOV / 2) / cv.getBoundingClientRect().height;
+    cam.target = [cam.target[0], cam.target[1] - m.u[1] * dy * wpp, cam.target[2] - m.u[2] * dy * wpp];
+  }
+}
+function updateCam() { const m = viewProjFor(cam.yaw, cam.elev, cam.fitDist * cam.zoom, cam.target); cam.VP = m.VP; cam.V3 = m.V3; }
+
+// ---------------------------------------------------------------- level scene
+let levelIdx = 0, level, tracks, st, staticMeshes = [], shadowMeshes = [], slabMeshes = [], tiltDisp = REST, hint = null, ended = false, result = null, lastT = 0, time = 0, flash = 0, simWall0 = 0, queue = [];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('rtilt4.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('rtilt4.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+let solved = store.get('solved', []);
+
+function buildScene() {
+  [...staticMeshes, ...shadowMeshes, ...slabMeshes].forEach(freeMesh);
+  const B = Builder(), SB = Builder(), HB = Builder();
+  // base plate
+  B.box(PLATE.x0 - .1, -.26, PLATE.z0 - .1, PLATE.x1 + .1, -.06, PLATE.z1 + .1, hex('#2b3370'), hex('#151a3d'));
+  B.box(PLATE.x0, -.06, PLATE.z0, PLATE.x1, 0, PLATE.z1, hex('#232a5e'), hex('#1b2150'));
+  // recess + pivot under the square
+  B.box(SQ.x0 - .06, 0, SQ.z0 - .02, SQ.x1 + .06, .004, SQ.z1 + .04, hex('#141936'));
+  B.box8([[-1.3, 0, Z_MID - .12], [1.3, 0, Z_MID - .12], [1.3, 0, Z_MID + .12], [-1.3, 0, Z_MID + .12], [-1.3, SQ.top - .1, Z_MID - .025], [1.3, SQ.top - .1, Z_MID - .025], [1.3, SQ.top - .1, Z_MID + .025], [-1.3, SQ.top - .1, Z_MID + .025]], hex('#8a90a8'), hex('#5c6280'));
+  const PIL = hex('#dfe4ef'), PILD = hex('#aab2c6');
+  for (const tr of tracks) {
+    const col = RGB[tr.i];
+    const iEnd = tr.cum.findIndex(c => c >= tr.sEntry - 1e-6);
+    const samples = [];
+    for (let q = 0; q <= iEnd; q++) samples.push({ p: tr.pts[q], D: tr.D[q], S: tr.Sd[q], s: tr.cum[q] });
+    // flume, in chunks so no single grid is too large
+    for (let a = 0; a < samples.length - 1; a += 150) halfPipe(B, samples.slice(a, Math.min(samples.length, a + 151)), col, a === 0);
+    // shadow ribbon on the plate
+    HB.grid(samples.length, 2, (r, k) => { const sm = samples[r]; const sd = norm([sm.S[0], 0, sm.S[2]]); return [[sm.p[0] + sd[0] * (k ? .16 : -.16), .006, sm.p[2] + sd[2] * (k ? .16 : -.16)], [0, 1, 0], [1, 1, 1]]; });
+    // support pillars, skipped where another pipe is underneath
+    for (let s = tr.sStart + .35; s < tr.sEntry - .5; s += .85) {
+      const q = tr.cum.findIndex(c => c >= s);
+      const bot = add(tr.pts[q], mul(tr.D[q], HP.R));
+      if (bot[1] < .12) continue;
+      let blocked = false;
+      for (const o of tracks) {
+        for (let k = 0; k < o.pts.length && !blocked; k += 2) {
+          if (o === tr && Math.abs(o.cum[k] - s) < .6) continue;
+          const pp = o.pts[k];
+          if (pp[1] < bot[1] - .05 && Math.hypot(pp[0] - bot[0], pp[2] - bot[2]) < .27) blocked = true;
+        }
+        if (blocked) break;
+      }
+      if (blocked) continue;
+      B.cyl([bot[0], 0, bot[2]], [bot[0], bot[1] + .02, bot[2]], .028, PIL);
+      B.cyl([bot[0], 0, bot[2]], [bot[0], .035, bot[2]], .06, PILD);
+    }
+    // spiral centre poles with spokes
+    for (const pole of tr.poles) {
+      B.cyl([pole.c[0], 0, pole.c[1]], [pole.c[0], pole.top + .05, pole.c[1]], .045, PIL, 14);
+      B.cyl([pole.c[0], 0, pole.c[1]], [pole.c[0], .04, pole.c[1]], .1, PILD, 14);
+      for (let q = 0; q < tr.pts.length; q += 6) {
+        const pp = tr.pts[q], hd = Math.hypot(pp[0] - pole.c[0], pp[2] - pole.c[1]);
+        if (Math.abs(hd - pole.r) > .03 || pp[1] > pole.top + .1) continue;
+        const bot = add(pp, mul(tr.D[q], HP.R));
+        B.cyl([pole.c[0], bot[1], pole.c[1]], bot, .018, PIL, 6);
+      }
+    }
+  }
+  staticMeshes = B.done(); shadowMeshes = HB.done();
+  // the end square, built around its pivot
+  const loc = w => sub(w, PIV);
+  SB.box(SQ.x0 - PIV[0], SQ.top - .1 - PIV[1], SQ.z0 - PIV[2], SQ.x1 - PIV[0], SQ.top - PIV[1], SQ.z1 - PIV[2], hex('#d5d9e4'), hex('#9aa0b4'));
+  SB.quad(loc([SQ.x0 + .04, SQ.top + .002, Z_MID - .015]), loc([SQ.x1 - .04, SQ.top + .002, Z_MID - .015]), loc([SQ.x1 - .04, SQ.top + .002, Z_MID + .015]), loc([SQ.x0 + .04, SQ.top + .002, Z_MID + .015]), [0, 1, 0], hex('#9ea5ba'));
+  for (const tr of tracks) {
+    const x = tr.pts[tr.pts.length - 1][0], samples = [];
+    for (let k = 0; k <= 12; k++) { const z = SQ.z0 + .005 + (SQ.laneEnd + .06 - SQ.z0) * k / 12; samples.push({ p: loc([x, AXIS_Y_SQ, z]), D: [0, -1, 0], S: [1, 0, 0], s: z - SQ.z0 + .3 }); }
+    halfPipe(SB, samples, RGB[tr.i], false);
+    // end stop
+    SB.box(x - .15 - PIV[0], SQ.top - PIV[1], SQ.laneEnd + .06 - PIV[2], x + .15 - PIV[0], AXIS_Y_SQ + .02 - PIV[1], SQ.laneEnd + .1 - PIV[2], shadeC(RGB[tr.i], -.3));
+  }
+  slabMeshes = SB.done();
+  fitPts = [[PLATE.x0, 0, PLATE.z0], [PLATE.x1, 0, PLATE.z0], [PLATE.x0, 0, PLATE.z1], [PLATE.x1, 0, PLATE.z1]];
+  for (const tr of tracks) { const p = tr.pts[0]; fitPts.push([p[0], p[1] + .3, p[2]]); }
+}
+
+function ballWorld(b) {
+  const ball = st.balls[b], tr = tracks[b];
+  const p = pointAt(tr, ball.s), D = frameAt(tr, ball.s);
+  const c = add(p, mul(D, PIPE.r - RB));
+  if (ball.s >= tr.sEntry) { const r = m3v(rotX(tiltDisp), sub(c, PIV)); return add(r, PIV); }
+  return c;
+}
+
+function loadLevel(i) {
+  levelIdx = i; level = LEVELS[i];
+  tracks = buildGeometry(level);
+  buildScene(); fitCamera();
+  document.getElementById('lvlNum').textContent = level.name ? 'LEVEL ' + (i + 1) : 'RAINBOW TILT';
+  document.getElementById('lvlName').textContent = level.name || 'Level ' + (i + 1);
+  store.set('last', i);
+  reset();
+}
+function reset() {
+  st = newState(tracks); tiltDisp = REST; hint = null; ended = false; result = null; flash = 0; queue = []; simWall0 = performance.now();
+  updateDots(); closeAll();
+}
+function updateDots() {
+  const d = document.getElementById('dots');
+  if (!d.children.length) COLORS.forEach(c => { const i = document.createElement('i'); i.style.color = c; d.appendChild(i); });
+  let n = 0;
+  st.balls.forEach((b, k) => { const on = b.mode === 'done'; d.children[k].classList.toggle('on', on); if (on) n++; });
+  document.getElementById('homeN').textContent = n;
+}
+
+// ---------------------------------------------------------------- input: tap balls, drag to orbit, pinch to zoom
+const ptrs = new Map(); let gesture = null;
+const TAP_R = 56;   // generous touch radius (CSS px) around each waiting ball
+function pickBall(x, y) {
+  let best = -1, bd = 1e9;
+  for (let b = 0; b < 7; b++) {
+    if (st.balls[b].mode !== 'idle' || queue.some(q => q.b === b)) continue;
+    const w = ballWorld(b), q = project(cam.VP, w), e = project(cam.VP, [w[0] + RB, w[1], w[2]]);
+    const rad = Math.max(TAP_R, Math.abs(e[0] - q[0]) * 4);
+    // above the ball row: the whole column is a launch zone; below: a tall oval
+    const d = y < q[1] ? Math.abs(q[0] - x) : Math.hypot(q[0] - x, (q[1] - y) * .5);
+    if (d < rad && d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  ptrs.set(e.pointerId, { x, y });
+  if (!ended) { const b = pickBall(x, y); if (b >= 0) { queue.push({ b, t: (e.timeStamp - simWall0) / 1000 }); if (hint && hint.b === b) hint = null; ptrs.get(e.pointerId).ball = true; return; } }
+  if (ptrs.size === 2) { const [a, c] = [...ptrs.values()]; gesture = { pinch: Math.hypot(a.x - c.x, a.y - c.y), zoom: cam.zoom }; }
+  try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+});
+cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p || p.ball) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const dx = x - p.x, dy = y - p.y; p.x = x; p.y = y;
+  const free = [...ptrs.values()].filter(q => !q.ball);
+  if (free.length >= 2 && gesture) { const [a, c] = free; const d = Math.hypot(a.x - c.x, a.y - c.y); cam.zoom = Math.max(.5, Math.min(1.6, gesture.zoom * gesture.pinch / d)); }
+  else if (free.length === 1) { cam.yaw = Math.max(-.8, Math.min(.8, cam.yaw - dx * .006)); cam.elev = Math.max(.3, Math.min(1.45, cam.elev + dy * .005)); }
+});
+const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) gesture = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = Math.max(.5, Math.min(1.6, cam.zoom * Math.exp(e.deltaY * .001))); }, { passive: false });
+cv.addEventListener('dblclick', () => { cam.yaw = 0; cam.elev = ELEV0; cam.zoom = 1; });
+
+// ---------------------------------------------------------------- render
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+  gl.viewport(0, 0, cv.width, cv.height);
+  if (tracks) fitCamera();
+}
+window.addEventListener('resize', resize);
+function bindMesh(m) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, m.vb); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, m.nb); gl.vertexAttribPointer(aN, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, m.cb); gl.vertexAttribPointer(aC, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib);
+}
+function draw(m, T, R, Sc, col, opt = {}) {
+  bindMesh(m);
+  gl.uniform3fv(U.uT, T); gl.uniformMatrix3fv(U.uR, false, R); gl.uniform3fv(U.uS, Sc);
+  gl.uniform4f(U.uC, col[0], col[1], col[2], col[3] == null ? 1 : col[3]);
+  gl.uniform3fv(U.uF, opt.fc || [1, 1, 1]); gl.uniform1f(U.uFA, opt.fa || 0);
+  gl.uniform1f(U.uMetal, opt.metal || 0); gl.uniform1f(U.uE, opt.glow ? 2 : opt.emit ? 1 : 0);
+  gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_SHORT, 0);
+}
+function render() {
+  updateCam();
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(true);
+  gl.uniformMatrix4fv(U.uVP, false, cam.VP); gl.uniformMatrix3fv(U.uV, false, cam.V3);
+  const dist = cam.fitDist * cam.zoom; gl.uniform2f(U.uFog, dist - 4, dist + 8);
+  const ONE = [1, 1, 1];
+  for (const m of staticMeshes) draw(m, [0, 0, 0], I3, ONE, [1, 1, 1]);
+  const R = rotX(tiltDisp);
+  const sf = flash > 0 ? { fc: hex('#ffe27a'), fa: .45 * flash } : {};
+  for (const m of slabMeshes) draw(m, PIV, R, ONE, [1, 1, 1], Object.assign({ metal: .3 }, sf));
+  const pos = [];
+  for (let b = 0; b < 7; b++) {
+    let w = ballWorld(b);
+    if (st.balls[b].mode === 'blocked' && !ended) w = [w[0] + Math.sin(time * 22 + b) * .006, w[1], w[2]];
+    pos.push(w);
+    draw(SPH, w, I3, [RB, RB, RB], [.86, .88, .93], { metal: .92 });
+  }
+  gl.depthMask(false);
+  for (const m of shadowMeshes) draw(m, [0, 0, 0], I3, ONE, [0, 0, 0, .16], { emit: true });
+  for (let b = 0; b < 7; b++) {
+    const w = pos[b];
+    draw(DISC, [w[0], .008, w[2]], I3, [.11, 1, .11], [0, 0, 0, Math.max(.12, .4 - w[1] * .08)], { emit: true });
+    if (st.balls[b].mode === 'idle' && !queue.some(q => q.b === b) && !ended) {
+      const pulse = .5 + .5 * Math.sin(time * 3 + b * .9), k = .3 + .03 * pulse;
+      draw(DISC, [w[0], w[1] - .02, w[2]], I3, [k, 1, k], [...RGB[b], .16 + .1 * pulse], { emit: true });
+      draw(RING, [w[0], w[1] - .02, w[2]], I3, [k, 1, k], [...shadeC(RGB[b], .35), .55 + .3 * pulse], { emit: true });
+    }
+    if (st.balls[b].mode === 'idle' && !queue.some(q => q.b === b) && !ended) {
+      const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+      draw(BEAM, [w[0], w[1] + .05, w[2]], new Float32Array([cy, 0, -sy, 0, 1, 0, sy, 0, cy]), [.5, 1.7, 1], [...shadeC(RGB[b], .35), .85 + .15 * Math.sin(time * 3 + b)], { glow: true });
+    }
+    if (result === 'lose' && (st.balls[b].mode === 'idle' || st.balls[b].mode === 'blocked')) {
+      const k = .5 + .5 * Math.sin(time * 6);
+      draw(RING, [w[0], w[1] - .02, w[2]], I3, [.3, 1, .3], [1, .3, .35, .45 + .45 * k], { emit: true });
+    }
+    if (hint && hint.b === b) {
+      const k = .6 + .4 * Math.sin(time * 8);
+      draw(RING, [w[0], w[1] - .01, w[2]], I3, [.42, 1, .42], [1, .83, .3, k], { emit: true });
+    }
+  }
+  gl.depthMask(true);
+}
+
+// ---------------------------------------------------------------- loop
+function frame(now) {
+  const gap = now - (lastT || now); lastT = now;
+  if (gap > 1000) simWall0 += gap - 16;           // tab was hidden: pause rather than jump
+  const dt = Math.min(.1, gap / 1000); time += dt;
+  if (!ended) {
+    // simulation runs on the wall clock; taps are applied at their exact event time
+    const target = (now - simWall0) / 1000;
+    const before = st.balls.filter(b => b.mode === 'done').length;
+    while (st.t + DT <= target) {
+      for (let k = queue.length - 1; k >= 0; k--) if (queue[k].t <= st.t) { release(st, queue[k].b); queue.splice(k, 1); }
+      step(st, tracks, level.sq); if (verdict(st)) break;
+    }
+    if (st.balls.filter(b => b.mode === 'done').length !== before) updateDots();
+  }
+  tiltDisp += ((st.tipped ? TIP : REST) - tiltDisp) * Math.min(1, dt * 12);
+  if (flash > 0) flash = Math.max(0, flash - dt * .7);
+  if (hint && time > hint.until) hint = null;
+  if (!ended) { const v = verdict(st); if (v) { ended = true; result = v; updateDots(); v === 'win' ? win() : lose(); } }
+  render();
+  requestAnimationFrame(frame);
+}
+function win() {
+  flash = 1;
+  if (!solved.includes(levelIdx)) { solved.push(levelIdx); store.set('solved', solved); }
+  setTimeout(() => {
+    document.getElementById('endT').textContent = 'Solved!';
+    document.getElementById('endP').textContent = levelIdx + 1 < LEVELS.length ? 'All seven made it onto the square.' : 'All seven made it. That was the final level!';
+    document.getElementById('endB').style.display = levelIdx + 1 < LEVELS.length ? '' : 'none';
+    open('ovEnd');
+  }, 1100);
+}
+const NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet'];
+const chip = b => `<b style="color:${shadeC(RGB[b], .25).map(v => Math.round(v * 255)).reduce((s, v) => s + v.toString(16).padStart(2, '0'), '#')}">${NAMES[b]}</b>`;
+const list = bs => bs.length === 1 ? chip(bs[0]) : bs.slice(0, -1).map(chip).join(', ') + ' and ' + chip(bs[bs.length - 1]);
+// work out what actually went wrong
+function failReason() {
+  const idle = [], late = [];
+  st.balls.forEach((b, k) => { if (b.mode === 'idle') idle.push(k); else if (b.mode === 'blocked') late.push(k); });
+  const tip = st.tipBy != null ? chip(st.tipBy) : 'the first ball';
+  const it = n => n > 1 ? 'them' : 'it', was = n => n > 1 ? 'were' : 'was';
+  if (idle.length && !late.length) return ['Not launched', `${list(idle)} never left the start. All seven have to be rolling before ${tip} tips the square.`];
+  if (late.length && !idle.length) return ['Too late', `${list(late)} reached the square after ${tip} had tipped it. Launch ${it(late.length)} sooner, or hold ${tip} back.`];
+  return ['Tipped too soon', `${list(late)} ${was(late.length)} too late, and ${list(idle)} never left the start.`];
+}
+function lose() {
+  const [title, msg] = failReason();
+  setTimeout(() => {
+    document.getElementById('endT').textContent = title;
+    document.getElementById('endP').innerHTML = msg;
+    document.getElementById('endB').style.display = 'none';
+    open('ovEnd');
+  }, 900);
+}
+function doHint() {
+  if (ended) return;
+  let best = -1, bt = -1;
+  for (let b = 0; b < 7; b++) if (st.balls[b].mode === 'idle' && !queue.some(q => q.b === b)) { const t = travelTime(tracks[b]); if (t > bt) { bt = t; best = b; } }
+  if (best >= 0) hint = { b: best, until: time + 2.5 };
+}
+function open(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeAll() { document.querySelectorAll('.overlay').forEach(o => o.classList.add('hidden')); }
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeAll);
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('pointerdown', e => { if (e.target === o && o.id !== 'ovEnd') closeAll(); }));
+document.getElementById('bReset').onclick = reset;
+document.getElementById('bHint').onclick = doHint;
+document.getElementById('bHelp').onclick = () => open('ovHelp');
+document.getElementById('bLevels').onclick = () => {
+  const g = document.getElementById('lvGrid'); g.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement('button'); b.textContent = i + 1;
+    b.className = (solved.includes(i) ? 'done ' : '') + (i === levelIdx ? 'cur' : '');
+    b.disabled = i > 0 && !solved.includes(i - 1) && !solved.includes(i);
+    b.onclick = () => loadLevel(i);
+    g.appendChild(b);
+  });
+  open('ovLevels');
+};
+document.getElementById('endA').onclick = reset;
+document.getElementById('endB').onclick = () => loadLevel(Math.min(levelIdx + 1, LEVELS.length - 1));
+
+resize();
+loadLevel(Math.min(store.get('last', 0), LEVELS.length - 1));
+if (!store.get('seenHelp', false)) { open('ovHelp'); store.set('seenHelp', true); }
+window.__game = { get st() { return st; }, get tracks() { return tracks; }, get level() { return level; }, loadLevel, get result() { return result; },
+  ballScreen: b => { updateCam(); const q = project(cam.VP, ballWorld(b)); return [q[0], q[1]]; } };
+requestAnimationFrame(frame);
+</script>
+<script data-goatcounter="https://s77ffy.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
