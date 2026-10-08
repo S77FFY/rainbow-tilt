@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#121733">
 <meta name="app-repo" content="rainbow-tilt">
-<meta name="app-version" content="1.0.4">
+<meta name="app-version" content="1.0.5">
 <title>Rainbow Tilt</title>
 <style>
   :root{--fg:#f3f5ff;--dim:rgba(243,245,255,.55);--panel:rgba(20,25,52,.92);--accent:#ffd34d}
@@ -62,7 +62,7 @@
   <button id="bReset">↺ Reset</button>
   <button id="bHelp" aria-label="How to play">?</button>
 </div>
-<div id="ver">v1.0.4</div>
+<div id="ver">v1.0.5</div>
 
 <div class="overlay hidden" id="ovHelp"><div class="panel">
   <h2>Rainbow Tilt</h2>
@@ -71,7 +71,8 @@
     <li>Every flume is a different length, so every ball takes a different time to reach the square.</li>
     <li>The square is a seesaw. As soon as any ball rolls past its middle, it rocks up and shuts out every ball that isn't already on it.</li>
     <li>Time your starts so all seven balls get onto the square before it tips.</li>
-    <li>Drag to look around. Pinch to zoom.</li>
+    <li>Each level opens with a fly-around. Tap to skip it.</li>
+    <li>Drag to look around. Pinch to zoom. Double-tap to reset the view.</li>
   </ul>
   <button class="go" data-close>Play</button>
 </div></div>
@@ -349,7 +350,7 @@ const { sub, add, mul, dot, cross, norm } = v3;
 const RB = BALL_R;
 const PIV = [0, SQ.top, Z_MID];
 const REST = -2.5 * Math.PI / 180, TIP = 8 * Math.PI / 180;
-const PLATE = { x0: -3.62, x1: 3.62, z0: -5.45, z1: 5.55 };
+const FLOOR = { cx: 0, cz: .05, r: 6.45 };   // round turntable base
 
 // ---------------------------------------------------------------- WebGL (Wriggle renderer)
 const cv = document.getElementById('c');
@@ -416,6 +417,18 @@ function Builder() {
     cyl(a, b, r, col, seg = 10) { // cylinder between points a and b
       const ax = norm(sub(b, a)), t1 = norm(cross(ax, Math.abs(ax[1]) > .9 ? [1, 0, 0] : [0, 1, 0])), t2 = cross(ax, t1);
       B.grid(2, seg + 1, (rr, k) => { const an = k / seg * Math.PI * 2, d = add(mul(t1, Math.cos(an)), mul(t2, Math.sin(an))); return [add(rr ? b : a, mul(d, r)), d, col]; });
+    },
+    // flat round disc (top cap + side wall)
+    disc(cx, cz, r, y0, y1, col, sideCol, seg = 128) {
+      const base = B.room(seg * 3 + 3);
+      B.v([cx, y1, cz], [0, 1, 0], col);
+      for (let k = 0; k <= seg; k++) { const a = k / seg * Math.PI * 2; B.v([cx + Math.cos(a) * r, y1, cz + Math.sin(a) * r], [0, 1, 0], col); }
+      for (let k = 0; k < seg; k++) B.tri(base, base + 1 + k, base + 2 + k);
+      B.grid(2, seg + 1, (rr, k) => { const a = k / seg * Math.PI * 2, d = [Math.cos(a), 0, Math.sin(a)]; return [[cx + d[0] * r, rr ? y1 : y0, cz + d[2] * r], d, sideCol || col]; });
+    },
+    // flat ring on the floor
+    ring(cx, cz, r0, r1, y, col, seg = 128) {
+      B.grid(2, seg + 1, (rr, k) => { const a = k / seg * Math.PI * 2, r = rr ? r1 : r0; return [[cx + Math.cos(a) * r, y, cz + Math.sin(a) * r], [0, 1, 0], col]; });
     },
     done() { flush(); return out; }
   };
@@ -535,8 +548,10 @@ function buildScene() {
   [...staticMeshes, ...shadowMeshes, ...slabMeshes].forEach(freeMesh);
   const B = Builder(), SB = Builder(), HB = Builder();
   // base plate
-  B.box(PLATE.x0 - .1, -.26, PLATE.z0 - .1, PLATE.x1 + .1, -.06, PLATE.z1 + .1, hex('#2b3370'), hex('#151a3d'));
-  B.box(PLATE.x0, -.06, PLATE.z0, PLATE.x1, 0, PLATE.z1, hex('#232a5e'), hex('#1b2150'));
+  B.disc(FLOOR.cx, FLOOR.cz, FLOOR.r + .14, -.3, -.06, hex('#2b3370'), hex('#141936'));
+  B.disc(FLOOR.cx, FLOOR.cz, FLOOR.r, -.06, 0, hex('#232a5e'), hex('#1b2150'));
+  B.ring(FLOOR.cx, FLOOR.cz, FLOOR.r - .2, FLOOR.r - .13, .002, hex('#4a58b0'));
+  B.ring(FLOOR.cx, FLOOR.cz, FLOOR.r - .02, FLOOR.r + .12, -.058, hex('#6a78d0'));
   // recess + pivot under the square
   B.box(SQ.x0 - .06, 0, SQ.z0 - .02, SQ.x1 + .06, .004, SQ.z1 + .04, hex('#141936'));
   B.box8([[-1.3, 0, Z_MID - .12], [1.3, 0, Z_MID - .12], [1.3, 0, Z_MID + .12], [-1.3, 0, Z_MID + .12], [-1.3, SQ.top - .1, Z_MID - .025], [1.3, SQ.top - .1, Z_MID - .025], [1.3, SQ.top - .1, Z_MID + .025], [-1.3, SQ.top - .1, Z_MID + .025]], hex('#8a90a8'), hex('#5c6280'));
@@ -593,8 +608,10 @@ function buildScene() {
     SB.box(x - .15 - PIV[0], SQ.top - PIV[1], SQ.laneEnd + .06 - PIV[2], x + .15 - PIV[0], AXIS_Y_SQ + .02 - PIV[1], SQ.laneEnd + .1 - PIV[2], shadeC(RGB[tr.i], -.3));
   }
   slabMeshes = SB.done();
-  fitPts = [[PLATE.x0, 0, PLATE.z0], [PLATE.x1, 0, PLATE.z0], [PLATE.x0, 0, PLATE.z1], [PLATE.x1, 0, PLATE.z1]];
-  for (const tr of tracks) { const p = tr.pts[0]; fitPts.push([p[0], p[1] + .3, p[2]]); }
+  // frame the puzzle itself (the round floor may run off the sides)
+  fitPts = [[SQ.x0, 0, SQ.z1 + .2], [SQ.x1, 0, SQ.z1 + .2]];
+  for (const tr of tracks) for (let q = 0; q < tr.pts.length; q += 8) { const p = tr.pts[q]; fitPts.push([p[0] - .3, p[1] + .25, p[2]], [p[0] + .3, p[1] + .25, p[2]], [p[0], 0, p[2]]); }
+  for (const tr of tracks) { const q = tr.pts[0]; fitPts.push([q[0], q[1] + .35, q[2]]); }
 }
 
 function ballWorld(b) {
@@ -613,6 +630,21 @@ function loadLevel(i) {
   document.getElementById('lvlName').textContent = level.name || 'Level ' + (i + 1);
   store.set('last', i);
   reset();
+  intro = { pending: true };   // starts once no panel is covering the board
+}
+// ---- level intro: one orbit around the level, landing on the play view
+let intro = null;
+const INTRO_MS = 5600;
+const easeIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+function introCam(k) {
+  const e = easeIO(k);
+  cam.yaw = (1 - e) * Math.PI * 2;
+  cam.elev = ELEV0 + (.42 - ELEV0) * (1 - e) + Math.sin(e * Math.PI) * .18;
+  cam.zoom = 1 + .32 * (1 - e) * (1 - e);
+}
+function endIntro() {
+  intro = null; cam.yaw = 0; cam.elev = ELEV0; cam.zoom = 1;
+  simWall0 = performance.now(); queue = [];
 }
 function reset() {
   st = newState(tracks); tiltDisp = REST; hint = null; ended = false; result = null; flash = 0; queue = []; simWall0 = performance.now();
@@ -644,6 +676,7 @@ function pickBall(x, y) {
 cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
   ptrs.set(e.pointerId, { x, y });
+  if (intro) { if (!intro.pending) endIntro(); ptrs.get(e.pointerId).ball = true; return; }   // tap skips the fly-around
   if (!ended) { const b = pickBall(x, y); if (b >= 0) { queue.push({ b, t: (e.timeStamp - simWall0) / 1000 }); if (hint && hint.b === b) hint = null; ptrs.get(e.pointerId).ball = true; return; } }
   if (ptrs.size === 2) { const [a, c] = [...ptrs.values()]; gesture = { pinch: Math.hypot(a.x - c.x, a.y - c.y), zoom: cam.zoom }; }
   try { cv.setPointerCapture(e.pointerId); } catch (err) {}
@@ -712,7 +745,7 @@ function render() {
       draw(DISC, [w[0], w[1] - .02, w[2]], I3, [k, 1, k], [...RGB[b], .16 + .1 * pulse], { emit: true });
       draw(RING, [w[0], w[1] - .02, w[2]], I3, [k, 1, k], [...shadeC(RGB[b], .35), .55 + .3 * pulse], { emit: true });
     }
-    if (st.balls[b].mode === 'idle' && !queue.some(q => q.b === b) && !ended) {
+    if (st.balls[b].mode === 'idle' && !queue.some(q => q.b === b) && !ended && !intro) {
       const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
       draw(BEAM, [w[0], w[1] + .05, w[2]], new Float32Array([cy, 0, -sy, 0, 1, 0, sy, 0, cy]), [.5, 1.7, 1], [...shadeC(RGB[b], .35), .85 + .15 * Math.sin(time * 3 + b)], { glow: true });
     }
@@ -733,7 +766,12 @@ function frame(now) {
   const gap = now - (lastT || now); lastT = now;
   if (gap > 1000) simWall0 += gap - 16;           // tab was hidden: pause rather than jump
   const dt = Math.min(.1, gap / 1000); time += dt;
-  if (!ended) {
+  if (intro) {
+    if (intro.pending && !document.querySelector('.overlay:not(.hidden)')) { intro.pending = false; intro.t0 = now; }
+    if (!intro.pending) { const k = (now - intro.t0) / INTRO_MS; if (k >= 1) endIntro(); else introCam(k); }
+    if (intro) simWall0 = now;    // the clock doesn't run during the fly-around
+  }
+  if (!ended && !intro) {
     // simulation runs on the wall clock; taps are applied at their exact event time
     const target = (now - simWall0) / 1000;
     const before = st.balls.filter(b => b.mode === 'done').length;
@@ -812,7 +850,7 @@ document.getElementById('endB').onclick = () => loadLevel(Math.min(levelIdx + 1,
 resize();
 loadLevel(Math.min(store.get('last', 0), LEVELS.length - 1));
 if (!store.get('seenHelp', false)) { open('ovHelp'); store.set('seenHelp', true); }
-window.__game = { get st() { return st; }, get tracks() { return tracks; }, get level() { return level; }, loadLevel, get result() { return result; },
+window.__game = { skipIntro: () => { if (intro) endIntro(); }, get intro() { return intro; }, get st() { return st; }, get tracks() { return tracks; }, get level() { return level; }, loadLevel, get result() { return result; },
   ballScreen: b => { updateCam(); const q = project(cam.VP, ballWorld(b)); return [q[0], q[1]]; } };
 requestAnimationFrame(frame);
 </script>
